@@ -1,0 +1,1 @@
+ALTER TABLE trips ADD COLUMN alert_generation INT NOT NULL DEFAULT 0;

@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.angular/
+**/target/
+.env
+.runtime/
+.metadata/
+test-results/
+playwright-report/

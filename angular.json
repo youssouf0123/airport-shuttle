@@ -1,0 +1,155 @@
+{
+  "version": 1,
+  "cli": {
+    "analytics": false
+  },
+  "projects": {
+    "passenger": {
+      "projectType": "application",
+      "root": "passenger-ui",
+      "sourceRoot": "passenger-ui/src",
+      "architect": {
+        "build": {
+          "builder": "@angular/build:application",
+          "options": {
+            "outputPath": {
+              "base": "dist/passenger",
+              "browser": ""
+            },
+            "index": "passenger-ui/src/index.html",
+            "browser": "passenger-ui/src/main.ts",
+            "polyfills": [
+              "zone.js"
+            ],
+            "tsConfig": "passenger-ui/tsconfig.app.json",
+            "styles": [
+              "shared/styles.css"
+            ],
+            "assets": [
+              {
+                "glob": "**/*",
+                "input": "public",
+                "output": "/"
+              }
+            ],
+            "baseHref": "/passenger/",
+            "allowedCommonJsDependencies": [
+              "leaflet"
+            ],
+            "budgets": [
+              {
+                "type": "initial",
+                "maximumWarning": "2mb",
+                "maximumError": "3mb"
+              }
+            ]
+          }
+        },
+        "serve": {
+          "builder": "@angular/build:dev-server",
+          "options": {
+            "buildTarget": "passenger:build"
+          }
+        }
+      }
+    },
+    "dispatcher": {
+      "projectType": "application",
+      "root": "dispatcher-ui",
+      "sourceRoot": "dispatcher-ui/src",
+      "architect": {
+        "build": {
+          "builder": "@angular/build:application",
+          "options": {
+            "outputPath": {
+              "base": "dist/dispatcher",
+              "browser": ""
+            },
+            "index": "dispatcher-ui/src/index.html",
+            "browser": "dispatcher-ui/src/main.ts",
+            "polyfills": [
+              "zone.js"
+            ],
+            "tsConfig": "dispatcher-ui/tsconfig.app.json",
+            "styles": [
+              "shared/styles.css"
+            ],
+            "assets": [
+              {
+                "glob": "**/*",
+                "input": "public",
+                "output": "/"
+              }
+            ],
+            "baseHref": "/dispatcher/",
+            "allowedCommonJsDependencies": [
+              "leaflet"
+            ],
+            "budgets": [
+              {
+                "type": "initial",
+                "maximumWarning": "2mb",
+                "maximumError": "3mb"
+              }
+            ]
+          }
+        },
+        "serve": {
+          "builder": "@angular/build:dev-server",
+          "options": {
+            "buildTarget": "dispatcher:build"
+          }
+        }
+      }
+    },
+    "driver": {
+      "projectType": "application",
+      "root": "driver-ui",
+      "sourceRoot": "driver-ui/src",
+      "architect": {
+        "build": {
+          "builder": "@angular/build:application",
+          "options": {
+            "outputPath": {
+              "base": "dist/driver",
+              "browser": ""
+            },
+            "index": "driver-ui/src/index.html",
+            "browser": "driver-ui/src/main.ts",
+            "polyfills": [
+              "zone.js"
+            ],
+            "tsConfig": "driver-ui/tsconfig.app.json",
+            "styles": [
+              "shared/styles.css"
+            ],
+            "assets": [
+              {
+                "glob": "**/*",
+                "input": "public",
+                "output": "/"
+              }
+            ],
+            "baseHref": "/driver/",
+            "allowedCommonJsDependencies": [
+              "leaflet"
+            ],
+            "budgets": [
+              {
+                "type": "initial",
+                "maximumWarning": "2mb",
+                "maximumError": "3mb"
+              }
+            ]
+          }
+        },
+        "serve": {
+          "builder": "@angular/build:dev-server",
+          "options": {
+            "buildTarget": "driver:build"
+          }
+        }
+      }
+    }
+  }
+}
