@@ -41,6 +41,19 @@ All three built interfaces are served by one Java process, with a 384 MB heap li
 
 For frontend development, run the backend and one of `npm run dev:passenger`, `npm run dev:dispatcher`, or `npm run dev:driver`. Those commands proxy `/api` to port 8088. Use the role path, e.g. `http://localhost:4200/passenger/`. Rebuild and restart the backend after backend changes.
 
+## Deploy to the iMac
+
+`deploy_airport_shuttle.sh` builds on the MacBook Pro and deploys the complete web system to the iMac: Spring Boot, MySQL schema/user, and the passenger, dispatcher, and driver interfaces behind NGINX. It uses the existing iMac login file and Java 17 installation, and does not replace the existing transportation website.
+
+Before the first deployment, provide the iMac MySQL administrator password without committing it:
+
+```sh
+cd ~/airport_shittle
+MYSQL_ADMIN_PASSWORD='your-imac-mysql-admin-password' ./deploy_airport_shuttle.sh
+```
+
+The default hostname is `airport.managetransportation.com`. Create that DNS record first, pointing to the same production entry point as the iMac. Do not change `SERVER_NAME` to `managetransportation.com` unless the existing transportation site is intentionally being replaced.
+
 ## Workflow
 
 1. Passenger chooses pickup, destination, flight, pickup time, passenger count, luggage, and optional notes, then requests a ride.
