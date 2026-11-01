@@ -43,7 +43,7 @@ For frontend development, run the backend and one of `npm run dev:passenger`, `n
 
 ## Deploy to the iMac
 
-`deploy_airport_shuttle.sh` builds on the MacBook Pro and deploys the complete web system to the iMac: Spring Boot, MySQL schema/user, and the passenger, dispatcher, and driver interfaces behind NGINX. It uses the existing iMac login file and Java 17 installation, and does not replace the existing transportation website.
+`deploy_airport_shuttle.sh` builds on the MacBook Pro and deploys the complete web system to the iMac: Spring Boot, MySQL schema/user, and the passenger, dispatcher, and driver interfaces behind NGINX. It uses the existing iMac login file and Java 17 installation.
 
 Before the first deployment, provide the iMac MySQL administrator password without committing it:
 
@@ -52,7 +52,7 @@ cd ~/airport_shittle
 MYSQL_ADMIN_PASSWORD='your-imac-mysql-admin-password' ./deploy_airport_shuttle.sh
 ```
 
-The default hostname is `airport.managetransportation.com`. Create that DNS record first, pointing to the same production entry point as the iMac. Do not change `SERVER_NAME` to `managetransportation.com` unless the existing transportation site is intentionally being replaced.
+The default hostname is the existing `managetransportation.com` site, so this deployment intentionally replaces the current root site with Airport Shuttle. The existing `api.managetransportation.com` server and other configured sites are not changed.
 
 ## Workflow
 

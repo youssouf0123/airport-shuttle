@@ -15,7 +15,7 @@ IMAC_PASSWORD="${IMAC_PASSWORD:-}"
 REMOTE_ROOT="${REMOTE_ROOT:-/Users/youssoufdiarra/airport-shuttle}"
 NGINX_ROOT="${NGINX_ROOT:-/usr/local/etc/nginx/airport-shuttle}"
 NGINX_CONF="${NGINX_CONF:-/usr/local/etc/nginx/conf/airport-shuttle.conf}"
-SERVER_NAME="${SERVER_NAME:-airport.managetransportation.com}"
+SERVER_NAME="${SERVER_NAME:-managetransportation.com}"
 BACKEND_PORT="${BACKEND_PORT:-8088}"
 JAVA_BIN="${JAVA_BIN:-/Users/youssoufdiarra/tms/runtime/jdk-17.0.19+10/Contents/Home/bin/java}"
 MYSQL_ADMIN_USER="${MYSQL_ADMIN_USER:-root}"
@@ -164,7 +164,20 @@ cat > "$STAGING/airport-shuttle.conf" <<EOF
 server {
     listen 80;
     listen [::]:80;
-    server_name $SERVER_NAME;
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    server_name $SERVER_NAME www.$SERVER_NAME;
+
+    ssl_certificate /usr/local/etc/nginx/cert.pem;
+    ssl_certificate_key /usr/local/etc/nginx/cert.key;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 10m;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers on;
+
+    location = / {
+        return 302 /passenger/;
+    }
 
     location /api/ {
         proxy_pass http://127.0.0.1:$BACKEND_PORT;
@@ -189,8 +202,50 @@ server {
         alias $NGINX_ROOT/driver/;
         try_files \$uri \$uri/ /driver/index.html;
     }
+
+    location / {
+        root $NGINX_ROOT/passenger;
+        try_files \$uri \$uri/ /passenger/index.html;
+    }
 }
 EOF
+
+cat > "$STAGING/replace-root-server.awk" <<'AWK'
+function brace_delta(s, opens, closes) {
+    opens = gsub(/\{/, "", s)
+    closes = gsub(/\}/, "", s)
+    return opens - closes
+}
+
+BEGIN {
+    in_server = 0
+    depth = 0
+    skip = 0
+    buffer = ""
+}
+
+{
+    if (!in_server && $0 ~ /^[[:space:]]*server[[:space:]]*\{/) {
+        in_server = 1
+        depth = 1
+        skip = 0
+        buffer = $0 "\n"
+        next
+    }
+    if (in_server) {
+        buffer = buffer $0 "\n"
+        if ($0 ~ /server_name[[:space:]]+/ && $0 ~ target) skip = 1
+        depth += brace_delta($0)
+        if (depth == 0) {
+            if (!skip) printf "%s", buffer
+            in_server = 0
+            buffer = ""
+        }
+        next
+    }
+    print
+}
+AWK
 
 echo "Preparing iMac application directories..."
 run_ssh "mkdir -p '$REMOTE_ROOT/backend' '$REMOTE_ROOT/frontend' '$REMOTE_ROOT/db'"
@@ -199,6 +254,7 @@ run_scp "$STAGING/backend.env" "$REMOTE_ROOT/backend/backend.env"
 run_scp "$STAGING/start-backend.sh" "$REMOTE_ROOT/backend/start-backend.sh"
 run_scp "$STAGING/db-setup.sql" "$REMOTE_ROOT/db/db-setup.sql"
 run_scp "$STAGING/airport-shuttle.conf" "$REMOTE_ROOT/airport-shuttle.conf"
+run_scp "$STAGING/replace-root-server.awk" "$REMOTE_ROOT/replace-root-server.awk"
 for role in passenger dispatcher driver; do
   run_scp "$STAGING/$role.tgz" "$REMOTE_ROOT/frontend/$role.tgz"
 done
@@ -208,11 +264,11 @@ echo "Provisioning iMac MySQL database and user..."
 run_ssh "set -e; MYSQL_PWD=$MYSQL_ADMIN_PASSWORD_Q /usr/local/mysql/bin/mysql -u $(shell_quote "$MYSQL_ADMIN_USER") < '$REMOTE_ROOT/db/db-setup.sql'"
 
 echo "Installing backend and web interfaces on the iMac..."
-run_ssh "set -e; chmod 700 '$REMOTE_ROOT/backend/start-backend.sh'; '$REMOTE_ROOT/backend/start-backend.sh'; sudo mkdir -p '$NGINX_ROOT'/passenger '$NGINX_ROOT'/dispatcher '$NGINX_ROOT'/driver; for role in passenger dispatcher driver; do sudo find '$NGINX_ROOT/'\$role -mindepth 1 -maxdepth 1 -exec rm -rf {} +; sudo tar -C '$NGINX_ROOT/'\$role -xzf '$REMOTE_ROOT/frontend/'\$role.tgz; done; sudo mkdir -p '$(dirname "$NGINX_CONF")'; sudo cp '$REMOTE_ROOT/airport-shuttle.conf' '$NGINX_CONF'; if ! grep -Fq '$NGINX_CONF' /usr/local/etc/nginx/nginx.conf; then awk -v include='$NGINX_CONF' '/^http[[:space:]]*\\{/ {print; print "    include " include ";"; next} {print}' /usr/local/etc/nginx/nginx.conf > '$REMOTE_ROOT/nginx.conf.tmp'; sudo cp '$REMOTE_ROOT/nginx.conf.tmp' /usr/local/etc/nginx/nginx.conf; fi; sudo /usr/local/etc/nginx/sbin/nginx -t -c /usr/local/etc/nginx/nginx.conf; sudo /usr/local/etc/nginx/sbin/nginx -s reload -c /usr/local/etc/nginx/nginx.conf"
+run_ssh "set -e; chmod 700 '$REMOTE_ROOT/backend/start-backend.sh'; '$REMOTE_ROOT/backend/start-backend.sh'; sudo mkdir -p '$NGINX_ROOT'/passenger '$NGINX_ROOT'/dispatcher '$NGINX_ROOT'/driver; for role in passenger dispatcher driver; do sudo find '$NGINX_ROOT/'\$role -mindepth 1 -maxdepth 1 -exec rm -rf {} +; sudo tar -C '$NGINX_ROOT/'\$role -xzf '$REMOTE_ROOT/frontend/'\$role.tgz; done; sudo mkdir -p '$(dirname "$NGINX_CONF")'; sudo cp '$REMOTE_ROOT/airport-shuttle.conf' '$NGINX_CONF'; awk -v target='$SERVER_NAME' -f '$REMOTE_ROOT/replace-root-server.awk' /usr/local/etc/nginx/nginx.conf > '$REMOTE_ROOT/nginx.conf.tmp'; sudo cp '$REMOTE_ROOT/nginx.conf.tmp' /usr/local/etc/nginx/nginx.conf; if ! grep -Fq '$NGINX_CONF' /usr/local/etc/nginx/nginx.conf; then awk -v include='$NGINX_CONF' '/^http[[:space:]]*\\{/ {print; print "    include " include ";"; next} {print}' /usr/local/etc/nginx/nginx.conf > '$REMOTE_ROOT/nginx.conf.tmp'; sudo cp '$REMOTE_ROOT/nginx.conf.tmp' /usr/local/etc/nginx/nginx.conf; fi; sudo /usr/local/etc/nginx/sbin/nginx -t -c /usr/local/etc/nginx/nginx.conf; sudo /usr/local/etc/nginx/sbin/nginx -s reload -c /usr/local/etc/nginx/nginx.conf"
 
 echo "Airport Shuttle production deployment completed on the iMac."
 echo "Backend: http://$SERVER_NAME/api/health"
 echo "Passenger: http://$SERVER_NAME/passenger/"
 echo "Dispatcher: http://$SERVER_NAME/dispatcher/"
 echo "Driver: http://$SERVER_NAME/driver/"
-echo "Existing managetransportation.com sites were not replaced."
+echo "The existing $SERVER_NAME root site was replaced as requested."
