@@ -37,6 +37,11 @@ if [ -z "$IMAC_PASSWORD" ] && [ -f "$IMAC_LOGIN_FILE" ]; then
   IMAC_PASSWORD="$(awk -F'is:' '/The password is:/ {gsub(/^[ \t]+|[ \t]+$/, "", $2); print $2; exit}' "$IMAC_LOGIN_FILE")"
 fi
 
+if [ -z "$MYSQL_ADMIN_PASSWORD" ] && [ -t 0 ]; then
+  read -r -s -p "iMac MySQL administrator password: " MYSQL_ADMIN_PASSWORD
+  printf '\n'
+fi
+
 require_command() {
   command -v "$1" >/dev/null 2>&1 || { echo "Missing required command: $1" >&2; exit 1; }
 }
