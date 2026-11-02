@@ -41,9 +41,9 @@ public class Auth {
  User find(long id) {return db.queryForObject("SELECT * FROM users WHERE id=?",(r,n)->new User(r.getLong("id"),r.getString("name"),r.getString("email"),r.getString("phone"),r.getString("role"),r.getString("vehicle"),r.getInt("seats"),r.getInt("luggage_capacity")),id);}
  @PostMapping("/login") public User login(@Valid @RequestBody Login input,HttpServletRequest request) {
   var rows=db.queryForList("SELECT id,password_hash FROM users WHERE email=? AND active=true",input.email().trim().toLowerCase(Locale.ROOT));
-  String hash=rows.isEmpty()?"$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy":(String)rows.getFirst().get("password_hash");
+  String hash=rows.isEmpty()?"$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy":(String)rows.get(0).get("password_hash");
   if(!encoder.matches(input.password(),hash)||rows.isEmpty()) throw error(401,"Email or password is incorrect.");
-  User user=find(((Number)rows.getFirst().get("id")).longValue());
+  User user=find(((Number)rows.get(0).get("id")).longValue());
   if(request.getHeader("X-Shuttle-Role")!=null&&!user.role().equals(request.getHeader("X-Shuttle-Role")))throw error(403,"This account belongs to the "+user.role().toLowerCase(Locale.ROOT)+" workspace. Use the matching link below.");
   establish(request,user);return user;
  }
@@ -75,6 +75,11 @@ public class Auth {
 
  @Configuration
  static class Security implements WebMvcConfigurer {
+  @Value("${app.cors.allowed-origins:}") String allowedOrigins;
+  @Override public void addCorsMappings(CorsRegistry registry) {
+   if(allowedOrigins==null||allowedOrigins.isBlank())return;
+   registry.addMapping("/api/**").allowedOrigins(Arrays.stream(allowedOrigins.split(",")).map(String::trim).filter(s->!s.isBlank()).toArray(String[]::new)).allowedMethods("GET","HEAD","OPTIONS","POST","PUT","DELETE").allowedHeaders("*").allowCredentials(true).maxAge(3600);
+  }
   @Override public void addInterceptors(InterceptorRegistry registry) {
    registry.addInterceptor(new HandlerInterceptor() {
     @Override public boolean preHandle(HttpServletRequest request,HttpServletResponse response,Object handler) {

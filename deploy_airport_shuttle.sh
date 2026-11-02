@@ -15,9 +15,11 @@ IMAC_PASSWORD="${IMAC_PASSWORD:-}"
 REMOTE_ROOT="${REMOTE_ROOT:-/Users/youssoufdiarra/airport-shuttle}"
 NGINX_ROOT="${NGINX_ROOT:-/usr/local/etc/nginx/airport-shuttle}"
 NGINX_CONF="${NGINX_CONF:-/usr/local/etc/nginx/conf/airport-shuttle.conf}"
+NGINX_BIN="${NGINX_BIN:-/usr/local/bin/nginx}"
 SERVER_NAME="${SERVER_NAME:-managetransportation.com}"
 BACKEND_PORT="${BACKEND_PORT:-8088}"
-JAVA_BIN="${JAVA_BIN:-/Users/youssoufdiarra/tms/runtime/jdk-17.0.19+10/Contents/Home/bin/java}"
+JAVA_HOME_REMOTE="${JAVA_HOME_REMOTE:-/Users/youssoufdiarra/tms/runtime/jdk-17.0.19+10/Contents/Home}"
+JAVA_BIN="${JAVA_BIN:-$JAVA_HOME_REMOTE/bin/java}"
 # Keep Airport Shuttle isolated from the existing TMS database. Set this only
 # for an intentional shared-database test; production defaults to its own DB.
 USE_EXISTING_TMS_DB="${USE_EXISTING_TMS_DB:-false}"
@@ -36,9 +38,14 @@ DB_USER="${DB_USER:-airport_shuttle}"
 DB_PASSWORD="${DB_PASSWORD:-}"
 SEED_DEMO="${SEED_DEMO:-false}"
 DEMO_PASSWORD="${DEMO_PASSWORD:-}"
+FIREBASE_ORIGINS="${FIREBASE_ORIGINS:-https://airport-shuttle-passenger-ui.web.app,https://airport-shuttle-dispatcher-ui.web.app,https://airport-shuttle-driver-ui.web.app}"
 
 if [ -z "$IMAC_PASSWORD" ] && [ -f "$IMAC_LOGIN_FILE" ]; then
   IMAC_PASSWORD="$(awk -F'is:' '/The password is:/ {gsub(/^[ \t]+|[ \t]+$/, "", $2); print $2; exit}' "$IMAC_LOGIN_FILE")"
+fi
+
+if [ "$USE_EXISTING_TMS_DB" != "true" ] && [ -z "$MYSQL_ADMIN_PASSWORD" ] && [ -f "$IMAC_LOGIN_FILE" ]; then
+  MYSQL_ADMIN_PASSWORD="$(awk -F': ' '/password which is/ {gsub(/^[ \t]+|[ \t]+$/, "", $2); print $2; exit}' "$IMAC_LOGIN_FILE")"
 fi
 
 if [ "$USE_EXISTING_TMS_DB" != "true" ] && [ -z "$MYSQL_ADMIN_PASSWORD" ] && [ -t 0 ]; then
@@ -126,10 +133,14 @@ fi
 
 cat > "$STAGING/backend.env" <<EOF
 DB_NAME=$(shell_quote "$DB_NAME")
+DB_URL=$(shell_quote "jdbc:mysql://127.0.0.1:3306/$DB_NAME?serverTimezone=America/New_York&useSSL=false&allowPublicKeyRetrieval=true")
 DB_USER=$(shell_quote "$DB_USER")
 DB_PASSWORD=$(shell_quote "$DB_PASSWORD")
 PORT=$(shell_quote "$BACKEND_PORT")
 BIND_ADDRESS='127.0.0.1'
+COOKIE_SECURE='true'
+COOKIE_SAME_SITE='none'
+APP_CORS_ALLOWED_ORIGINS=$(shell_quote "$FIREBASE_ORIGINS")
 SEED_DEMO=$(shell_quote "$SEED_DEMO")
 DEMO_PASSWORD=$(shell_quote "$DEMO_PASSWORD")
 EOF
@@ -175,7 +186,7 @@ if [ -z "\$db_user" ] || [ -z "\$db_password" ]; then
   echo "The existing TMS backend did not expose MySQL credentials." >&2
   exit 1
 fi
-printf 'DB_URL=%q\\n' "jdbc:mysql://127.0.0.1:3306/\$TMS_DATABASE_NAME?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true" > "\$APP_DIR/backend.env"
+printf 'DB_URL=%q\\n' "jdbc:mysql://127.0.0.1:3306/\$TMS_DATABASE_NAME?serverTimezone=America/New_York&useSSL=false&allowPublicKeyRetrieval=true" > "\$APP_DIR/backend.env"
 printf 'DB_USER=%q\\n' "\$db_user" >> "\$APP_DIR/backend.env"
 printf 'DB_PASSWORD=%q\\n' "\$db_password" >> "\$APP_DIR/backend.env"
 printf 'PORT=%q\\n' '$BACKEND_PORT' >> "\$APP_DIR/backend.env"
@@ -317,11 +328,11 @@ if [ "$USE_EXISTING_TMS_DB" = "true" ]; then
 else
   MYSQL_ADMIN_PASSWORD_Q="$(shell_quote "$MYSQL_ADMIN_PASSWORD")"
   echo "Provisioning iMac MySQL database and user..."
-  DB_PREPARE_CMD="MYSQL_PWD=$MYSQL_ADMIN_PASSWORD_Q /usr/local/mysql/bin/mysql -u $(shell_quote "$MYSQL_ADMIN_USER") < '$REMOTE_ROOT/db/db-setup.sql'"
+  DB_PREPARE_CMD="MYSQL_PWD=$MYSQL_ADMIN_PASSWORD_Q /usr/local/mysql/bin/mysql -h 127.0.0.1 -P 3306 -u $(shell_quote "$MYSQL_ADMIN_USER") < '$REMOTE_ROOT/db/db-setup.sql'"
 fi
 
 echo "Installing backend and web interfaces on the iMac..."
-run_ssh "set -e; $DB_PREPARE_CMD; chmod 700 '$REMOTE_ROOT/backend/start-backend.sh'; '$REMOTE_ROOT/backend/start-backend.sh'; sudo mkdir -p '$NGINX_ROOT'/passenger '$NGINX_ROOT'/dispatcher '$NGINX_ROOT'/driver; for role in passenger dispatcher driver; do sudo find '$NGINX_ROOT/'\$role -mindepth 1 -maxdepth 1 -exec rm -rf {} +; sudo tar -C '$NGINX_ROOT/'\$role -xzf '$REMOTE_ROOT/frontend/'\$role.tgz; done; sudo mkdir -p '$(dirname "$NGINX_CONF")'; sudo cp '$REMOTE_ROOT/airport-shuttle.conf' '$NGINX_CONF'; awk -v target='$SERVER_NAME' -f '$REMOTE_ROOT/replace-root-server.awk' /usr/local/etc/nginx/nginx.conf > '$REMOTE_ROOT/nginx.conf.tmp'; sudo cp '$REMOTE_ROOT/nginx.conf.tmp' /usr/local/etc/nginx/nginx.conf; if ! grep -Fq '$NGINX_CONF' /usr/local/etc/nginx/nginx.conf; then awk -v include='$NGINX_CONF' -f '$REMOTE_ROOT/insert-nginx-include.awk' /usr/local/etc/nginx/nginx.conf > '$REMOTE_ROOT/nginx.conf.tmp'; sudo cp '$REMOTE_ROOT/nginx.conf.tmp' /usr/local/etc/nginx/nginx.conf; fi; sudo /usr/local/etc/nginx/sbin/nginx -t -c /usr/local/etc/nginx/nginx.conf; sudo /usr/local/etc/nginx/sbin/nginx -s reload -c /usr/local/etc/nginx/nginx.conf"
+run_ssh "set -e; test -x '$JAVA_BIN'; $DB_PREPARE_CMD; chmod 700 '$REMOTE_ROOT/backend/start-backend.sh'; '$REMOTE_ROOT/backend/start-backend.sh'; sudo mkdir -p '$NGINX_ROOT'/passenger '$NGINX_ROOT'/dispatcher '$NGINX_ROOT'/driver; for role in passenger dispatcher driver; do sudo find '$NGINX_ROOT/'\$role -mindepth 1 -maxdepth 1 -exec rm -rf {} +; sudo tar -C '$NGINX_ROOT/'\$role -xzf '$REMOTE_ROOT/frontend/'\$role.tgz; done; sudo mkdir -p '$(dirname "$NGINX_CONF")'; sudo cp '$REMOTE_ROOT/airport-shuttle.conf' '$NGINX_CONF'; awk -v target='$SERVER_NAME' -f '$REMOTE_ROOT/replace-root-server.awk' /usr/local/etc/nginx/nginx.conf > '$REMOTE_ROOT/nginx.conf.tmp'; sudo cp '$REMOTE_ROOT/nginx.conf.tmp' /usr/local/etc/nginx/nginx.conf; if ! grep -Fq '$NGINX_CONF' /usr/local/etc/nginx/nginx.conf; then awk -v include='$NGINX_CONF' -f '$REMOTE_ROOT/insert-nginx-include.awk' /usr/local/etc/nginx/nginx.conf > '$REMOTE_ROOT/nginx.conf.tmp'; sudo cp '$REMOTE_ROOT/nginx.conf.tmp' /usr/local/etc/nginx/nginx.conf; fi; sudo '$NGINX_BIN' -t -c /usr/local/etc/nginx/nginx.conf; sudo '$NGINX_BIN' -s reload -c /usr/local/etc/nginx/nginx.conf"
 
 echo "Airport Shuttle production deployment completed on the iMac."
 echo "Backend: http://$SERVER_NAME/api/health"

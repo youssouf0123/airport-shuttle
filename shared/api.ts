@@ -18,7 +18,8 @@ export class Api {
  private avatarKey(user:User){return `airport-shuttle-avatar:${this.role.toLowerCase()}:${user.id}`}
  constructor(){effect(()=>{const user=this.user();this.avatar.set(user?localStorage.getItem(this.avatarKey(user)):null)})}
  async request<T>(path:string,method='GET',body?:unknown):Promise<T>{
-  const res=await fetch('/api'+path,{method,credentials:'same-origin',headers:{'Content-Type':'application/json','X-Shuttle-Request':'1','X-Shuttle-Role':this.role},body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(15000)});
+  const apiBase=String((globalThis as any).__AIRPORT_API_BASE__||'').replace(/\/$/,'');
+  const res=await fetch(apiBase+'/api'+path,{method,credentials:apiBase?'include':'same-origin',headers:{'Content-Type':'application/json','X-Shuttle-Request':'1','X-Shuttle-Role':this.role},body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(15000)});
   if(!res.ok){let message='Request failed. Please try again.';try{message=(await res.json()).message||message}catch{}if(res.status===401&&this.user()){this.user.set(null);this.clearData()}throw new ApiError(message,res.status)}
   const text=await res.text();return (text?JSON.parse(text):null) as T;
  }

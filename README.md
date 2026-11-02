@@ -43,7 +43,7 @@ For frontend development, run the backend and one of `npm run dev:passenger`, `n
 
 ## Deploy to the iMac
 
-`deploy_airport_shuttle.sh` builds on the MacBook Pro and deploys the complete web system to the iMac: Spring Boot, an isolated `airport_shuttle` MySQL schema/user, and the passenger, dispatcher, and driver interfaces behind NGINX. It follows the existing TMS connection pattern but does not reuse or modify the TMS database.
+`deploy_airport_shuttle.sh` builds on the MacBook Pro and deploys the complete web system to the iMac: Spring Boot, an isolated `airport_shuttle` MySQL schema/user, and the passenger, dispatcher, and driver interfaces behind NGINX. It follows the existing TMS connection pattern but does not reuse or modify the TMS database. Airport Shuttle uses the same Java 17 runtime already used by TMS.
 
 Before the first deployment, provide the iMac MySQL administrator password without committing it:
 
@@ -53,6 +53,14 @@ MYSQL_ADMIN_PASSWORD='your-imac-mysql-admin-password' ./deploy_airport_shuttle.s
 ```
 
 The default hostname is the existing `managetransportation.com` site, so this deployment intentionally replaces the current root site with Airport Shuttle. The existing `api.managetransportation.com` server and other configured sites are not changed. The Airport Shuttle database is separate from TMS.
+
+Firebase hosting projects:
+
+- Passenger: `https://airport-shuttle-passenger-ui.web.app/`
+- Dispatcher: `https://airport-shuttle-dispatcher-ui.web.app/`
+- Driver: `https://airport-shuttle-driver-ui.web.app/`
+
+Run `./deploy_airport_shuttle_firebase.sh` to rebuild and publish all three. They use `https://managetransportation.com` as their API base and the backend allowlist is configured for all three Firebase origins.
 
 ## Workflow
 

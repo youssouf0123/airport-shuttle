@@ -47,7 +47,7 @@ public class TripService {
  public Trip get(long id,User u) {
   var rows=db.query(SELECT+"WHERE t.id=?",mapper(),id);
   if(rows.isEmpty())throw error(404,"Trip not found.");
-  Trip t=rows.getFirst();
+  Trip t=rows.get(0);
   if(u.role().equals("PASSENGER")&&u.id()!=t.passengerId() || u.role().equals("DRIVER")&&!Objects.equals(t.driverId(),u.id()))throw error(404,"Trip not found.");
   return t;
  }
@@ -68,7 +68,7 @@ public class TripService {
   // Serialize same-passenger retries before checking the idempotency key.
   db.queryForList("SELECT id FROM users WHERE id=? FOR UPDATE",u.id());
   var existing=db.queryForList("SELECT id FROM trips WHERE passenger_id=? AND request_key=?",u.id(),b.requestKey());
-  if(!existing.isEmpty())return get(((Number)existing.getFirst().get("id")).longValue(),u);
+  if(!existing.isEmpty())return get(((Number)existing.get(0).get("id")).longValue(),u);
   routeValid(b.pickupId(),b.destinationId(),null);
   if(b.pickupAt().isBefore(Instant.now().plusSeconds(60))||b.pickupAt().isAfter(Instant.now().plus(Duration.ofDays(180))))throw error(400,"Pickup must be at least a minute from now and within 180 days.");
   db.update("INSERT INTO trips(passenger_id,pickup_id,destination_id,flight,pickup_at,passengers,bags,notes,fare_cents,request_key) VALUES(?,?,?,?,?,?,?,?,?,?)",
@@ -81,7 +81,7 @@ public class TripService {
   if(TERMINAL.contains(t.status())||Set.of("BOARDING","IN_TRANSIT").contains(t.status()))throw error(409,"This trip can no longer be reassigned.");
   var drivers=db.queryForList("SELECT * FROM users WHERE id=? AND role='DRIVER' AND active=true FOR UPDATE",a.driverId());
   if(drivers.isEmpty())throw error(400,"Choose a driver.");
-  var d=drivers.getFirst();
+  var d=drivers.get(0);
   if(t.passengers()>((Number)d.get("seats")).intValue()||t.bags()>((Number)d.get("luggage_capacity")).intValue())throw error(409,"This vehicle does not have enough capacity.");
   int conflicts=db.queryForObject("SELECT COUNT(*) FROM trips WHERE driver_id=? AND id<>? AND status NOT IN ('COMPLETED','CANCELLED') AND ABS(TIMESTAMPDIFF(MINUTE,pickup_at,?))<90",Integer.class,a.driverId(),id,Timestamp.from(t.pickupAt()));
   if(conflicts>0)throw error(409,"Driver has another trip within 90 minutes of this pickup.");
