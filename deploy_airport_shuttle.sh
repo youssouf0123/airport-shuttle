@@ -38,7 +38,7 @@ DB_USER="${DB_USER:-airport_shuttle}"
 DB_PASSWORD="${DB_PASSWORD:-}"
 SEED_DEMO="${SEED_DEMO:-false}"
 DEMO_PASSWORD="${DEMO_PASSWORD:-}"
-FIREBASE_ORIGINS="${FIREBASE_ORIGINS:-https://airport-shuttle-passenger-ui.web.app,https://airport-shuttle-dispatcher-ui.web.app,https://airport-shuttle-driver-ui.web.app}"
+FIREBASE_ORIGINS="${FIREBASE_ORIGINS:-https://airport-shuttle-passenger-ui.web.app,https://airport-shuttle-passenger-ui.firebaseapp.com,https://airport-shuttle-dispatcher-ui.web.app,https://airport-shuttle-dispatcher-ui.firebaseapp.com,https://airport-shuttle-driver-ui.web.app,https://airport-shuttle-driver-ui.firebaseapp.com}"
 
 if [ -z "$IMAC_PASSWORD" ] && [ -f "$IMAC_LOGIN_FILE" ]; then
   IMAC_PASSWORD="$(awk -F'is:' '/The password is:/ {gsub(/^[ \t]+|[ \t]+$/, "", $2); print $2; exit}' "$IMAC_LOGIN_FILE")"
