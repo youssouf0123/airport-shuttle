@@ -88,6 +88,9 @@ public class Auth {
      response.setHeader("Referrer-Policy","strict-origin-when-cross-origin");
      if(request.getRequestURI().startsWith("/api/")) {
       response.setHeader("Cache-Control","no-store");
+      // Let Spring's CORS handler answer browser preflight requests before
+      // authentication is enforced for protected API resources.
+      if("OPTIONS".equals(request.getMethod())) return true;
       // Custom headers cannot be sent by cross-origin forms; CORS is intentionally disabled.
       if(!Set.of("GET","HEAD","OPTIONS").contains(request.getMethod()) && !"1".equals(request.getHeader("X-Shuttle-Request")))throw error(403,"Request verification failed.");
       if(!Set.of("/api/auth/login","/api/auth/register","/api/health").contains(request.getRequestURI()))user(request);
