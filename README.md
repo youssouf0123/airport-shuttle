@@ -60,15 +60,21 @@ Firebase hosting projects:
 - Dispatcher: `https://airport-shuttle-dispatcher-ui.web.app/`
 - Driver: `https://airport-shuttle-driver-ui.web.app/`
 
-Run `./deploy_airport_shuttle_firebase.sh` to rebuild and publish all three. They use `https://managetransportation.com` as their API base and the backend allowlist is configured for all three Firebase origins.
+Custom-domain URLs (Firebase Hosting setup is in progress):
+
+- Passenger: `https://passenger.managetransportation.com/`
+- Dispatcher: `https://dispatcher.managetransportation.com/`
+- Driver: `https://driver.managetransportation.com/`
+
+These custom domains keep the apps and API on the same site so session cookies work in browsers that block third-party cookies. Run `./deploy_airport_shuttle_firebase.sh` to rebuild and publish all three. They use `https://managetransportation.com` as their API base, and the backend deployment allowlist includes both the Firebase and custom-domain origins.
 
 ## Workflow
 
 1. Passenger chooses pickup, destination, flight, pickup time, passenger count, luggage, and optional notes, then requests a ride.
-2. Dispatcher assigns a vehicle/driver. An assignment reserves a 90-minute window around pickup and enforces vehicle seat/luggage capacity. Drivers can hold future assignments but only operate one trip at a time.
+2. Dispatcher sees each driver's vehicle seat capacity and any trip within the 90-minute assignment window before assigning. The backend enforces both checks. Drivers can hold future assignments but only operate one trip at a time.
 3. Driver accepts or declines. Declines return the request to dispatch. Acceptance enables the ordered progression below.
 4. Driver starts toward pickup and explicitly enables browser location sharing. Road-based ETA is calculated when routing is available; the driver can enter an ETA override.
-5. Passenger sees trip/location updates and receives an in-page arrival alert when a reported pickup ETA first reaches five minutes or less. Browser push is opt-in.
+5. Passenger sees trip/location updates, receives an alert when the driver marks arrived, and can see the live wait timer. Browser push is opt-in.
 6. Driver completes boarding, transit, and completion. Passenger history retains the trip and offers a downloadable text receipt.
 
 ```text
@@ -76,7 +82,7 @@ REQUESTED -> ASSIGNED -> ACCEPTED -> EN_ROUTE -> ARRIVING
           -> BOARDING -> IN_TRANSIT -> COMPLETED
 ```
 
-The transition from ARRIVING is BOARDING. Before boarding, the passenger or dispatcher may cancel. Dispatcher route edits and reassignment are audited. Reassignment is disallowed after boarding; a pickup cannot be changed after boarding starts. Server-side version checks reject stale writes.
+The transition from ARRIVING is BOARDING. The wait time is saved when boarding begins or the trip ends. After the configurable 10-minute grace period, the driver may report a passenger no-show; this ends the trip and records the wait for dispatch review, without collecting a fee. Before boarding, the passenger or dispatcher may cancel. Dispatcher route edits and reassignment are audited. Reassignment is disallowed after boarding; a pickup cannot be changed after boarding starts. Server-side version checks reject stale writes.
 
 ## Structure
 
@@ -87,7 +93,7 @@ The transition from ARRIVING is BOARDING. Before boarding, the passenger or disp
 - `airport-shuttle-ws/`: role/session authentication, trip domain rules, MySQL persistence, Flyway migrations, push notification delivery, and tests.
 - `public/sw.js`: browser push notification and notification-click handling. It does not cache private API data.
 
-The UIs share a single dependency installation and common components, but have separate Angular entry points and production builds. Data is stored in MySQL. Browser storage is not used as a database. Updates poll the server every three seconds and expose an offline/reconnecting state. Location uploads are throttled to roughly eight seconds when GPS changes.
+Each UI is an independently installable Angular project with its own `package.json`, lockfile, workspace, and local copy of its shared UI modules. From any UI directory, run `npm ci`, then `npm run build` or `npm start`. All three use the same Spring Boot API; local development proxies `/api` to port 8088. The root scripts coordinate builds and deployment only. Data is stored in MySQL. Browser storage is not used as a database. Updates poll the server every three seconds and expose an offline/reconnecting state. Location uploads are throttled to roughly eight seconds when GPS changes.
 
 ## Tests
 
@@ -104,11 +110,11 @@ The tests cover the complete cross-role trip flow, role/ownership boundaries, in
 ## Operational boundaries
 
 - This is a working local web implementation. Sample operations use Bamako, Mali and Aéroport International Président Modibo Keïta-Sénou (BKO), with airport zones, Bamako landmarks, and hotels. Locations live in MySQL and are updated by Flyway migrations. Pickup inputs and displayed times use the browser's local time zone.
-- The demonstration fare is USD 45 plus USD 8 per additional passenger. Receipts are trip records, not proof of payment. No payment processor or live airline/flight-status feed is connected.
+- Fares use road distance at USD 1/km and the cached daily USD-to-XOF rate; the quote and rate are saved on the trip. The older USD 45 plus USD 8 per additional passenger wording was stale. Receipts are trip records, not proof of payment. No payment processor or live airline/flight-status feed is connected; payments and flight-driven pickup changes remain inactive until a provider and credentials are configured.
 - Maps use OpenStreetMap tiles and the public OSRM routing service. Estimates do not include live traffic. External map/routing availability is not guaranteed; the UI reports route failures and retains location markers. Configure a contracted routing/tile provider before operating at scale.
 - Browser GPS requires permission and a secure context (HTTPS, or localhost). The driver's page must remain active; browsers may suspend background location. Native/background tracking is intentionally deferred.
 - Web Push uses generated VAPID keys persisted in MySQL, real browser subscriptions, encrypted messages, a retry queue, and a service worker. Provider delivery depends on browser/OS permissions and connectivity. Automated tests validate generation, encryption, retries, and handling with simulated provider responses; delivery to a real unattended device still requires an operator/device test. Configure the VAPID contact before deployment.
-- The default bind address is loopback. For deployment, use HTTPS, set `COOKIE_SECURE=true`, set `SEED_DEMO=false`, provision real operator accounts, replace the demo credentials, and configure database backups and an appropriate session store. Sessions currently live in memory and expire on backend restart. No public deployment has been created.
+- The default bind address is loopback. For deployment, use HTTPS, set `COOKIE_SECURE=true`, set `SEED_DEMO=false`, provision real operator accounts, replace the demo credentials, and configure database backups. Sessions are persisted in MySQL with an eight-hour idle timeout and expire automatically. No public deployment has been created.
 
 ## API outline
 
@@ -117,7 +123,8 @@ All mutations require `X-Shuttle-Request: 1`; the browser also sends `X-Shuttle-
 - `POST /api/auth/login`, `/register`, `/logout`; `GET /api/auth/me`
 - `GET /api/locations`, `/drivers`, `/trips`; `POST /api/trips`
 - `GET /api/trips/{id}`, `/{id}/events`, `/{id}/receipt`
-- `PUT /api/trips/{id}/assignment`, `/{id}/route`, `/{id}/status`, `/{id}/location`
+- `GET /api/trips/{id}/assignment-options` previews driver seat and schedule conflicts; `PUT /api/trips/{id}/assignment` enforces them
+- `PUT /api/trips/{id}/route`, `/{id}/status`, `/{id}/location`, `/{id}/no-show`
 - `GET /api/notifications`; `PUT /api/notifications/{id}/read`
 - `GET /api/push/key`; `POST /api/push/subscribe`, `/unsubscribe`
 - `GET /api/health`

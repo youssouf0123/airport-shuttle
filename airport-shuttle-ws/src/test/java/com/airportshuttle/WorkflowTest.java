@@ -58,6 +58,16 @@ class WorkflowTest {
   JsonNode t=book();long id=t.get("id").asLong();call("PUT","/api/trips/"+id+"/assignment",passenger,Map.of("driverId",driverId,"version",0),403);
   call("GET","/api/trips/"+id,driver2,null,404);call("GET","/api/drivers",passenger,null,403);
  }
+ @Test void sameEmailCanHaveIndependentAccountsInDifferentWorkspaces()throws Exception{
+  String email="shared-"+UUID.randomUUID()+"@example.com";
+  String hash=new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder().encode("DispatcherPass123");
+  db.update("INSERT INTO users(name,email,password_hash,role) VALUES(?,?,?,'PASSENGER')","Shared Person",email,hash);
+  db.update("INSERT INTO users(name,email,password_hash,role) VALUES(?,?,?,'DISPATCHER')","Shared Person",email,hash);
+  var passengerLogin=mvc.perform(post("/api/auth/login").header("X-Shuttle-Request","1").header("X-Shuttle-Role","PASSENGER").contentType("application/json").content(json.writeValueAsString(Map.of("email",email,"password","DispatcherPass123")))).andExpect(status().isOk()).andReturn();
+  assertThat(json.readTree(passengerLogin.getResponse().getContentAsString()).get("role").asText()).isEqualTo("PASSENGER");
+  var dispatcherLogin=mvc.perform(post("/api/auth/login").header("X-Shuttle-Request","1").header("X-Shuttle-Role","DISPATCHER").contentType("application/json").content(json.writeValueAsString(Map.of("email",email,"password","DispatcherPass123")))).andExpect(status().isOk()).andReturn();
+  assertThat(json.readTree(dispatcherLogin.getResponse().getContentAsString()).get("role").asText()).isEqualTo("DISPATCHER");
+ }
  @Test void passengerCannotReadAnotherPassengersTrip()throws Exception{
   JsonNode t=book();var request=post("/api/auth/register").header("X-Shuttle-Request","1").contentType("application/json").content(json.writeValueAsString(Map.of("name","Other Passenger","email",UUID.randomUUID()+"@example.com","password","AnotherLongPassword1","role","DISPATCHER")));
   var result=mvc.perform(request).andExpect(status().isOk()).andReturn();MockHttpSession other=(MockHttpSession)result.getRequest().getSession();

@@ -38,7 +38,7 @@ DB_USER="${DB_USER:-airport_shuttle}"
 DB_PASSWORD="${DB_PASSWORD:-}"
 SEED_DEMO="${SEED_DEMO:-false}"
 DEMO_PASSWORD="${DEMO_PASSWORD:-}"
-FIREBASE_ORIGINS="${FIREBASE_ORIGINS:-https://airport-shuttle-passenger-ui.web.app,https://airport-shuttle-passenger-ui.firebaseapp.com,https://airport-shuttle-dispatcher-ui.web.app,https://airport-shuttle-dispatcher-ui.firebaseapp.com,https://airport-shuttle-driver-ui.web.app,https://airport-shuttle-driver-ui.firebaseapp.com}"
+FIREBASE_ORIGINS="${FIREBASE_ORIGINS:-https://airport-shuttle-passenger-ui.web.app,https://airport-shuttle-passenger-ui.firebaseapp.com,https://airport-shuttle-dispatcher-ui.web.app,https://airport-shuttle-dispatcher-ui.firebaseapp.com,https://airport-shuttle-driver-ui.web.app,https://airport-shuttle-driver-ui.firebaseapp.com,https://passenger.managetransportation.com,https://dispatcher.managetransportation.com,https://driver.managetransportation.com}"
 
 if [ -z "$IMAC_PASSWORD" ] && [ -f "$IMAC_LOGIN_FILE" ]; then
   IMAC_PASSWORD="$(awk -F'is:' '/The password is:/ {gsub(/^[ \t]+|[ \t]+$/, "", $2); print $2; exit}' "$IMAC_LOGIN_FILE")"
@@ -79,12 +79,13 @@ run_ssh() {
   local remote_command="$1"
   IMAC_PASSWORD="$IMAC_PASSWORD" expect -f - "$IMAC_PORT" "$IMAC_HOST" "$remote_command" <<'EOF'
 set timeout -1
+log_user 0
 set port [lindex $argv 0]
 set host [lindex $argv 1]
 set remote_command [lindex $argv 2]
 spawn ssh -tt -p $port -o StrictHostKeyChecking=accept-new $host $remote_command
 expect {
-  -re {[Pp]assword:} {send -- "$env(IMAC_PASSWORD)\r"; exp_continue}
+  -re {[Pp]assword:} {send -- "$env(IMAC_PASSWORD)\r"; log_user 1; exp_continue}
   eof {catch wait result; exit [lindex $result 3]}
 }
 EOF
@@ -95,12 +96,13 @@ run_scp() {
   local target_path="$2"
   IMAC_PASSWORD="$IMAC_PASSWORD" expect -f - "$IMAC_PORT" "$source_path" "$IMAC_HOST:$target_path" <<'EOF'
 set timeout -1
+log_user 0
 set port [lindex $argv 0]
 set source_path [lindex $argv 1]
 set target_path [lindex $argv 2]
 spawn scp -P $port -o StrictHostKeyChecking=accept-new $source_path $target_path
 expect {
-  -re {[Pp]assword:} {send -- "$env(IMAC_PASSWORD)\r"; exp_continue}
+  -re {[Pp]assword:} {send -- "$env(IMAC_PASSWORD)\r"; log_user 1; exp_continue}
   eof {catch wait result; exit [lindex $result 3]}
 }
 EOF
@@ -161,9 +163,15 @@ fi
 cd "\$APP_DIR"
 nohup "\$JAVA_BIN" -Xms64m -Xmx384m -jar "\$APP_DIR/airport-shuttle-ws.jar" > "\$APP_DIR/backend.log" 2>&1 < /dev/null &
 echo "\$!" > "\$PID_FILE"
-sleep 5
-curl -fsS "http://127.0.0.1:\${PORT}/api/health" >/dev/null
-echo "Airport Shuttle backend started on port \${PORT}"
+for attempt in {1..30}; do
+  if curl -fsS "http://127.0.0.1:\${PORT}/api/health" >/dev/null; then
+    echo "Airport Shuttle backend started on port \${PORT}"
+    exit 0
+  fi
+  sleep 2
+done
+tail -n 60 "\$APP_DIR/backend.log" >&2
+exit 1
 EOF
 chmod 700 "$STAGING/start-backend.sh"
 

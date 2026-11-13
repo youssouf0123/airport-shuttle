@@ -8,7 +8,15 @@ API_BASE="${AIRPORT_API_BASE:-https://managetransportation.com}"
 
 command -v firebase >/dev/null 2>&1 || { echo "Firebase CLI is required." >&2; exit 1; }
 
-npm run build
+npm run build --prefix passenger-ui
+npm run build --prefix dispatcher-ui
+npm run build --prefix driver-ui
+mkdir -p dist/passenger dist/dispatcher dist/driver
+cp -R passenger-ui/dist/browser/. dist/passenger/
+cp -R dispatcher-ui/dist/browser/. dist/dispatcher/
+cp -R driver-ui/dist/browser/. dist/driver/
+cp public/index.html dist/index.html
+cp public/sw.js dist/sw.js
 
 for role in passenger dispatcher driver; do
   case "$role" in

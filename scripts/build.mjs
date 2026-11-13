@@ -1,10 +1,13 @@
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, copyFileSync } from 'node:fs';
+import { mkdirSync, copyFileSync, cpSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 const root=fileURLToPath(new URL('../',import.meta.url));
 for(const role of ['passenger','dispatcher','driver']){
- const result=spawnSync(process.execPath,['node_modules/@angular/cli/bin/ng.js','build',role],{cwd:root,stdio:'inherit',env:{...process.env,NG_BUILD_MAX_WORKERS:'2',NODE_OPTIONS:'--max-old-space-size=1536'}});
+ const ui=`${role}-ui`;
+ const result=spawnSync('npm',['run','build'],{cwd:`${root}/${ui}`,stdio:'inherit',env:{...process.env,NG_BUILD_MAX_WORKERS:'2',NODE_OPTIONS:'--max-old-space-size=1536'}});
  if(result.status!==0)process.exit(result.status||1);
+ mkdirSync(`${root}/dist/${role}`,{recursive:true});
+ cpSync(`${root}/${ui}/dist/browser`,`${root}/dist/${role}`,{recursive:true});
 }
 mkdirSync(new URL('../dist/',import.meta.url),{recursive:true});
 copyFileSync(new URL('../public/sw.js',import.meta.url),new URL('../dist/sw.js',import.meta.url));

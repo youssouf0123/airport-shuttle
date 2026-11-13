@@ -17,8 +17,9 @@ const child=spawn('java',['-Xms64m','-Xmx384m','-jar',background?runtimeJar:jar]
 if(background){
  writeFileSync(pidFile,String(child.pid),{mode:0o600});child.unref();
  let healthy=false;
- for(let i=0;i<30;i++){try{if((await fetch('http://localhost:'+(env.PORT||'8088')+'/api/health',{signal:AbortSignal.timeout(1000)})).ok){healthy=true;break}}catch{}await new Promise(resolve=>setTimeout(resolve,500))}
- if(!healthy){console.error('Server did not become healthy. Check .runtime/server.log.');process.exit(1)}
+ // Flyway migrations can take longer on local MySQL, especially on first startup.
+ for(let i=0;i<120;i++){try{if((await fetch('http://localhost:'+(env.PORT||'8088')+'/api/health',{signal:AbortSignal.timeout(1000)})).ok){healthy=true;break}}catch{}await new Promise(resolve=>setTimeout(resolve,500))}
+ if(!healthy){try{child.kill('SIGTERM')}catch{}console.error('Server did not become healthy within 60 seconds. Check .runtime/server.log.');process.exit(1)}
  console.log('Airport Shuttle is running at http://localhost:'+(env.PORT||'8088')+'/passenger/');process.exit(0);
 }
 for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>child.kill(signal));
